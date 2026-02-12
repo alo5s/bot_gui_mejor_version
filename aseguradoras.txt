@@ -1,0 +1,7 @@
+LISTA COMPLETA DE ASEGURADORAS (139 compañías)
+
+1. SANCOR
+
+Total: 141 aseguradoras identificadas
+
+Nota: Esta lista está extraída del dropdown del sistema RPA y contiene todas las opciones disponibles para selección múltiple.

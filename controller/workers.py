@@ -227,7 +227,6 @@ class SessionWorker(QThread):
             if self.bot.etap_4(self.aseguradora, self.polizas_ubicacion, self.pago_ubicacion, self.excel_ubicacion, self.guardado_ubicacion):
                 self.current_stage = 5
                 self.automation_ok.emit("✅ Etapa 4 completada")
-
             else:
                 self._fail("Error en Etapa 4")
 

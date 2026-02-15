@@ -1,0 +1,5 @@
+# .gitignore
+
+Pólizas/app/app_back_v9.0.0_estable/bot/playwright-browsers/*
+!Pólizas/app/app_back_v9.0.0_estable/bot/playwright-browsers/.gitkeep
+

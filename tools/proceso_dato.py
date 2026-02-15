@@ -64,3 +64,25 @@ class BuscarPDFPoliza:
 
         # Devuelve rutas completas en string
         return [str(pdf.resolve()) for pdf in pdfs]
+
+
+
+class Comprobante_pago:
+    def __init__(self, directorio: str):
+        self.directorio = Path(directorio)
+
+    def buscar(self) -> list[str]:
+        if not self.directorio.exists():
+            raise FileNotFoundError("El directorio no existe")
+
+        # Buscar PDFs y PNGs
+        archivos = []
+        for extension in ("*.pdf", "*.jpg"):
+            archivos.extend(self.directorio.glob(extension))
+
+        if not archivos:
+            raise FileNotFoundError("No se encontró ningún archivo PDF o PNG")
+
+        # Devuelve rutas completas en string
+        return [str(archivo.resolve()) for archivo in archivos]
+

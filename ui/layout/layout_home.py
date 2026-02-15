@@ -7,6 +7,11 @@ from PySide6.QtCore import Signal, QSettings, Qt
 from .styles import get_combined_styles
 from tools.utilidedes import cargar_aseguradoras
 
+from bot.config.settings import (
+    DEFAULT_UBICACIONES,
+    DEFAULT_ASEGURADORAS
+)
+
 class HomeView(QWidget):
     # ---------- señales ----------
     logout_requested = Signal()
@@ -15,11 +20,16 @@ class HomeView(QWidget):
     resume_requested = Signal()
     stop_requested = Signal()
 
-    def __init__(self, username: str, aseguradoras: list):
+
+    def __init__(self, username: str):
         super().__init__()
-        self.aseguradoras = aseguradoras
 
         self.settings = QSettings("BotRPA", "Paths")
+    
+        self.config_settings = QSettings("BotRPA", "Config")
+        self.auto_save_enabled = self.config_settings.value(
+            "auto_save_data", False, type=bool
+        )
         self.setObjectName("app_widget")
 
         self.bot_running = False
@@ -65,7 +75,13 @@ class HomeView(QWidget):
 
         
         # --------- selectora ----------
-        self.ubicaciones = ["NORDELTA GENERALGENERAL", "NORDELTA", "PUERTOS", "DALVIAN"]
+        custom_ubicaciones = self.config_settings.value("custom_ubicaciones", [], type=list)
+        
+        if not isinstance(custom_ubicaciones, list):
+            custom_ubicaciones = [custom_ubicaciones]
+
+        self.ubicaciones = list(dict.fromkeys(DEFAULT_UBICACIONES + custom_ubicaciones))
+        
         self.combo_ubicacion = QComboBox()
         self.combo_ubicacion.setEditable(False)
         self.combo_ubicacion.setPlaceholderText("Seleccionar ubicaciones")
@@ -87,6 +103,13 @@ class HomeView(QWidget):
         self.combo_ubicacion.setCurrentIndex(0)
         
         # --------- selectora asegurador ----------
+        custom_aseguradoras = self.config_settings.value("custom_aseguradoras", [], type=list)
+
+        if not isinstance(custom_aseguradoras, list):
+            custom_aseguradoras = [custom_aseguradoras]
+
+        self.aseguradoras = list(dict.fromkeys(DEFAULT_ASEGURADORAS + custom_aseguradoras))
+        
         self.combo_asegurador = QComboBox()
         self.combo_asegurador.setEditable(False)
         self.combo_asegurador.setPlaceholderText("Seleccionar aseguradora")
@@ -105,11 +128,6 @@ class HomeView(QWidget):
         
         self.combo_asegurador.setModel(model)
         self.combo_asegurador.setCurrentIndex(0)
-
-
-
-
-
 
         # addWIdget
         control_layout.addWidget(self.btn_start)
@@ -160,7 +178,7 @@ class HomeView(QWidget):
         paths_layout.addWidget(path_row("📊 Excel:", self.label_excel, self.btn_excel))
         self.btn_excel.clicked.connect(lambda: self.select_path("excel", self.label_excel))
 
-        paths_layout.addWidget(path_row("📂 Guardado:", self.label_guardado, self.btn_guardado))
+        paths_layout.addWidget(path_row("📂 Guardado (Verificacion):", self.label_guardado, self.btn_guardado))
         self.btn_guardado.clicked.connect(lambda: self.select_path("guardado", self.label_guardado))
         
         paths_card.setLayout(paths_layout)
@@ -175,6 +193,11 @@ class HomeView(QWidget):
         logs_title = QLabel("Logs del sistema")
         logs_title.setObjectName("logs_title")
 
+
+        self.btn_clear_data = QPushButton("🧹 Borrar datos guardados")
+        self.btn_clear_data.clicked.connect(self.clear_saved_data)
+
+
         self.btn_logs = QPushButton("Limpiar Log")
         self.btn_logs.clicked.connect(self.clear_logs)
         
@@ -185,6 +208,8 @@ class HomeView(QWidget):
         content_logs = QHBoxLayout()
         content_logs.addWidget(logs_title)
         content_logs.addStretch()
+        content_logs.addWidget(self.btn_clear_data)
+
         content_logs.addWidget(self.btn_logs)
 
         logs_layout.addLayout(content_logs)
@@ -200,39 +225,38 @@ class HomeView(QWidget):
 
         self.setStyleSheet(get_combined_styles())
 
+        # 🔥 Restaurar datos si está activado
+        self._load_saved_paths()
+        self._load_saved_selections()
     # ==================================================
     # BOT CONTROLS
     # ==================================================
     def on_start_pause_clicked(self):
-        # ▶ Iniciar
+
         if not self.bot_running:
             ubicaciones = self.get_selected_ubicaciones()
             aseguradoras = self.get_selected_seguro()
-            
-            polizas = self.settings.value("polizas")
-            pago = self.settings.value("pagos")
-            excel = self.settings.value("excel")
-            guardado = self.settings.value("guardado")
 
             if not ubicaciones or not aseguradoras:
                 self.status_label.setText("⚠ Seleccione ubicación y aseguradora")
                 return
 
+            if self.auto_save_enabled:
+                self.settings.setValue("ubicaciones_seleccionadas", ubicaciones)
+                self.settings.setValue("aseguradoras_seleccionadas", aseguradoras)
+
             self.bot_running = True
-            self.bot_paused = False
             self.btn_start.setText("⏸   Pausar")
             self.btn_stop.setEnabled(True)
             self.status_label.setText("Estado: Ejecutando")
 
-            # self.start_requested.emit(ubicaciones,aseguradoras)
             self.start_requested.emit({
                 "ubicaciones": ubicaciones,
                 "aseguradoras": aseguradoras,
-                "polizas_ubicacion": polizas,
-                "pago_ubicacion": pago,
-                "excel_ubicacion": excel,
-                "guardado_ubicacion": guardado,
-
+                "polizas_ubicacion": self.settings.value("polizas"),
+                "pago_ubicacion": self.settings.value("pagos"),
+                "excel_ubicacion": self.settings.value("excel"),
+                "guardado_ubicacion": self.settings.value("guardado"),
             })
             return
 
@@ -263,6 +287,41 @@ class HomeView(QWidget):
         self.status_label.setText("Estado: Detenido")
 
     # ==================================================
+    # CLEAR DATA
+    # ==================================================
+    def clear_saved_data(self):
+
+        reply = QMessageBox.warning(
+            self,
+            "Borrar datos",
+            "⚠ ¿Deseas borrar todos los datos guardados?\n\n"
+            "Se eliminarán paths y selecciones.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        self.settings.clear()
+
+        # Reset labels
+        self.label_polizas.setText("No seleccionada")
+        self.label_pagos.setText("No seleccionada")
+        self.label_excel.setText("No seleccionado")
+        self.label_guardado.setText("No seleccionado")
+
+        # Reset checkboxes
+        for combo in [self.combo_ubicacion, self.combo_asegurador]:
+            model = combo.model()
+            for i in range(model.rowCount()):
+                item = model.item(i)
+                if item and item.isCheckable():
+                    item.setCheckState(Qt.Unchecked)
+
+        QMessageBox.information(self, "Datos borrados", "✅ Datos eliminados correctamente")
+
+    # ==================================================
     # LOGOUT
     # ==================================================
     def on_logout_clicked(self):
@@ -275,54 +334,128 @@ class HomeView(QWidget):
         self.logs.clear()
 
     # ==================================================
-    # selectores
+    # HELPERS
     # ==================================================
-
     def get_selected_ubicaciones(self):
         model = self.combo_ubicacion.model()
-        seleccionadas = []
-
-        for i in range(model.rowCount()):
-            item = model.item(i)
-            if item and item.checkState() == Qt.Checked:
-                seleccionadas.append(item.text())
-
-        return seleccionadas
+        return [
+            model.item(i).text()
+            for i in range(model.rowCount())
+            if model.item(i) and model.item(i).checkState() == Qt.Checked
+        ]
 
     def get_selected_seguro(self):
         model = self.combo_asegurador.model()
-        seleccionadas_aseguradoras = []
+        return [
+            model.item(i).text()
+            for i in range(model.rowCount())
+            if model.item(i) and model.item(i).checkState() == Qt.Checked
+        ]
 
-        for i in range(model.rowCount()):
-            item = model.item(i)
-            if item and item.checkState() == Qt.Checked:
-                seleccionadas_aseguradoras.append(item.text())
+    def _load_saved_selections(self):
+        if not self.auto_save_enabled:
+            return
 
-        return seleccionadas_aseguradoras
+        ubicaciones = self.settings.value("ubicaciones_seleccionadas", [])
+        aseguradoras = self.settings.value("aseguradoras_seleccionadas", [])
 
+        if isinstance(ubicaciones, str):
+            ubicaciones = [ubicaciones]
+        if isinstance(aseguradoras, str):
+            aseguradoras = [aseguradoras]
 
+        for combo, saved in [
+            (self.combo_ubicacion, ubicaciones),
+            (self.combo_asegurador, aseguradoras),
+        ]:
+            model = combo.model()
+            for i in range(model.rowCount()):
+                item = model.item(i)
+                if item and item.text() in saved:
+                    item.setCheckState(Qt.Checked)
 
-    # ==================================================
-    # selectores de direciones
-    # ==================================================
-
-    
     def select_path(self, key, label):
         path = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta")
         if path:
             label.setText(path)
-            self.settings.setValue(key, path)
+            if self.auto_save_enabled:
+                self.settings.setValue(key, path)
 
     def _load_saved_paths(self):
-        paths = {
+        if not self.auto_save_enabled:
+            return
+
+        for key, label in {
             "polizas": self.label_polizas,
             "pagos": self.label_pagos,
             "excel": self.label_excel,
             "guardado": self.label_guardado,
-        }
-
-        for key, label in paths.items():
+        }.items():
             value = self.settings.value(key)
             if value:
                 label.setText(value)
+
+
+    # ==================================================
+    # RECARGAR DATOS PERSONALIZADOS (DESDE MENUBAR)
+    # ==================================================
+    def reload_custom_data(self):
+        # guardar selección actual para no perder checks
+        selected_ubicaciones = self.get_selected_ubicaciones()
+        selected_aseguradoras = self.get_selected_seguro()
+
+        # recargar settings
+        self.config_settings = QSettings("BotRPA", "Config")
+
+        # -------- UBICACIONES --------
+        custom_ubicaciones = self.config_settings.value("custom_ubicaciones", [], type=list)
+        if not isinstance(custom_ubicaciones, list):
+            custom_ubicaciones = [custom_ubicaciones]
+
+        self.ubicaciones = list(dict.fromkeys(DEFAULT_UBICACIONES + custom_ubicaciones))
+
+        model = QStandardItemModel()
+        placeholder = QStandardItem("Seleccionar ubicaciones")
+        placeholder.setEnabled(False)
+        model.appendRow(placeholder)
+
+        for u in self.ubicaciones:
+            item = QStandardItem(u)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            item.setData(
+                Qt.Checked if u in selected_ubicaciones else Qt.Unchecked,
+                Qt.CheckStateRole,
+            )
+            model.appendRow(item)
+
+        self.combo_ubicacion.setModel(model)
+        self.combo_ubicacion.setCurrentIndex(0)
+
+        # -------- ASEGURADORAS --------
+        custom_aseguradoras = self.config_settings.value("custom_aseguradoras", [], type=list)
+        if not isinstance(custom_aseguradoras, list):
+            custom_aseguradoras = [custom_aseguradoras]
+
+        self.aseguradoras = list(dict.fromkeys(DEFAULT_ASEGURADORAS + custom_aseguradoras))
+
+        model = QStandardItemModel()
+        placeholder = QStandardItem("Seleccionar aseguradora")
+        placeholder.setEnabled(False)
+        model.appendRow(placeholder)
+
+        for a in self.aseguradoras:
+            item = QStandardItem(a)
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            item.setData(
+                Qt.Checked if a in selected_aseguradoras else Qt.Unchecked,
+                Qt.CheckStateRole,
+            )
+            model.appendRow(item)
+
+        self.combo_asegurador.setModel(model)
+        self.combo_asegurador.setCurrentIndex(0)
+
+
+    def show_poliza_alert(self, mensaje: str):
+        QMessageBox.information(self, "Póliza terminada", mensaje)
 

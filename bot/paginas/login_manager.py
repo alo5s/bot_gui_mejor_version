@@ -23,28 +23,35 @@ class ManagerSession:
         self.page.fill(user_input, usuario)
        
         self.page.fill('#pass', password)
-        # page.fill(SELECTORS["password_field"], password)
  
         # Click botón de login
         self.page.click('button:has-text("Iniciar sesión")')
 
+        try:
+            # Esperamos explícitamente la URL HOME
+            self.page.wait_for_url(f"{URL_HOME}*", timeout=TIMEOUT_2)
+        except:
+            pass
+        return self.page.url.startswith(URL_HOME)
+        
         # Esperar a que cargue la página de HOME
         self.page.wait_for_load_state("networkidle")
 
-        if self.page.url.startswith(URL_HOME):
-            # Revisar si hay modal
-            close_modal_btn = self.page.locator('button:has-text("Close")')
-            if close_modal_btn.count() > 0:
-                try:
+
+    def _close_modal_safe(self):
+        try:
+            self.page.wait_for_load_state("networkidle")
+            if self.page.url.startswith(URL_HOME):
+
+                close_modal_btn = self.page.locator('button:has-text("Close")')
+
+                if close_modal_btn.count() > 0:
                     close_modal_btn.wait_for(state="visible", timeout=3000)
                     close_modal_btn.click()
                     print("✅ Modal cerrado")
-                except Exception as e:
-                    print("⚠️ No se pudo cerrar modal:", e)
-            return True
+        except Exception as e:
+            print("⚠️ No se pudo cerrar modal:", e)
 
-        print("❌ Fallo en login")
-        return False
 
     def logout(self):
         self.page.goto(URL_HOME)

@@ -34,10 +34,11 @@ class AppController:
     # CONFIG
     # ==================================================
     def set_show_browser(self, value: bool):
-        self.show_browser = value
-        if self.worker and not self.worker.isRunning():
+        # self.show_browser = value
+        # if self.worker and not self.worker.isRunning():
+        #     self.worker.show_browser = value
+        if self.worker:
             self.worker.show_browser = value
-
     # ==================================================
     # LOGIN
     # ==================================================
@@ -46,14 +47,20 @@ class AppController:
         self.worker.login(user, password)
 
     def on_login_ok(self, user):
-        self.home = HomeView(user, self.aseguradoras)
-
+        self.home = HomeView(user)
+        # conectar señal del menú
+        self.window.menu.data_updated.connect(self.home.reload_custom_data)
+        
         # 🔌 conectar señales UI → worker
         self.home.logout_requested.connect(self.logout)
         self.home.start_requested.connect(self.worker.start_automation)
         self.home.pause_requested.connect(self.worker.pause_automation)
         self.home.resume_requested.connect(self.worker.resume_automation)
         self.home.stop_requested.connect(self.worker.stop_automation)
+
+        # 🔹 conectar señal poliza_terminada → mostrar alert
+        self.worker.poliza_terminada.connect(self.home.show_poliza_alert)
+
 
         self.window.setCentralWidget(self.home)
 

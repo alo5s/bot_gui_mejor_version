@@ -1,8 +1,10 @@
 # bot/paginas/bot_manager.py
 
-from bot.config.urls import URL_HOME, ETAP_1, ETAP_2, ETAP_3, ETAP_4
+from bot.config.urls import URL_HOME, ETAP_1, ETAP_2, ETAP_3, ETAP_4, ETAP_5, ETAP_6, URL_CONF
 from bot.config.settings import TIMEOUT_1, TIMEOUT_2
-from tools.proceso_dato import ProcesadorXLSX, BuscarPDFPoliza
+from tools.proceso_dato import ProcesadorXLSX, BuscarPDFPoliza, Comprobante_pago
+
+import unicodedata
 
 from datetime import datetime
 import os
@@ -10,6 +12,55 @@ import os
 class ManagerBot:
     def __init__(self, page):
         self.page = page
+
+
+    def normalizar(self, texto: str) -> str:
+        if not texto:
+            return ""
+
+        texto = texto.strip()
+        texto = unicodedata.normalize("NFKD", texto)
+        texto = texto.encode("ascii", "ignore").decode("ascii")
+        return texto.lower()
+
+    def subir_comprobante(self, pago_ubicacion):
+        contenedor = self.page.locator(
+            'div.space-y-2:has(label:text-is("Comprobante de pago (Opcional)"))'
+        )
+
+        # 🔹 Si ya hay archivo, click en X para eliminarlo
+        btn_remove = contenedor.locator('button:has(svg.lucide-x)')
+        if btn_remove.count() > 0:
+            print("♻ Eliminando archivo previo de comprobante...")
+            btn_remove.first.click()
+            self.page.wait_for_timeout(800)  # espera que React limpie el input
+
+        # 🔹 Subir el archivo
+        ruta_archivo = Comprobante_pago(pago_ubicacion).buscar()[0]
+        input_file = contenedor.locator('input[name="insurancePaymentFile"]')
+        print(f"⬆ Subiendo comprobante {os.path.basename(ruta_archivo)}")
+        input_file.set_input_files(ruta_archivo)
+
+    def subir_poliza(self, polizas_ubicacio):
+        # Localizar el contenedor de Póliza
+        contenedor = self.page.locator(
+            'div.space-y-2:has(label:text-is("Póliza"))'
+        )
+
+        # 🔹 Si ya hay archivo subido, hacer click en la X para eliminarlo
+        btn_remove = contenedor.locator('button:has(svg.lucide-x)')
+        if btn_remove.count() > 0:
+            print("♻ Eliminando archivo previo de póliza...")
+            btn_remove.first.click()
+            self.page.wait_for_timeout(800)  # esperar que se limpie el input
+
+        # 🔹 Subir el archivo
+        ruta_archivo = BuscarPDFPoliza(polizas_ubicacio).buscar()[0]
+        input_file = contenedor.locator('input[name="insuranceFile"]')
+        print(f"⬆ Subiendo póliza {os.path.basename(ruta_archivo)}")
+        input_file.set_input_files(ruta_archivo)
+
+
 
     # ===============================
     # STOP
@@ -99,7 +150,6 @@ class ManagerBot:
 
                     confirmar_btn.click()
 
-                    print(f"✅ Ubicación seleccionada: {ubicacion}")
 
                 except Exception:
                     print(f"⚠ Ubicación no encontrada: {ubicacion}")
@@ -136,17 +186,11 @@ class ManagerBot:
     # ETAPA 3 (placeholder)
     # ===============================
     def etap_3(self, aseguradora, polizas_ubicacio, pago_ubicacion, excel_ubiacion, guardado_ubicacion ):
-        print("etapa 3")
-        print("Aseguradora:", aseguradora)
-        print("DEBUG aseguradora:", aseguradora, type(aseguradora))
-
-        print("Ubicacion:", polizas_ubicacio, pago_ubicacion, excel_ubiacion, guardado_ubicacion)
         try:
             if not self.page.url.startswith(ETAP_3):
                 return False
 
 
-            print("Listo etap 3 confirmadada")
 
             try:
                 close_btn = self.page.get_by_role("button", name="Close")
@@ -205,7 +249,6 @@ class ManagerBot:
                 idpropuesta = base["idpropuesta"]
                 fecha_pago = base["fecha_pago"]
                 fin_vigencia = base["fin_vigencia"]
-                print(idpropuesta, fecha_pago, fin_vigencia)
 
 
             #
@@ -241,24 +284,13 @@ class ManagerBot:
             )
 
             input_fecha_fin.fill(fecha_final)
-            
-            #
-            #  Subida de Poliza 
-            #
-            buscador = BuscarPDFPoliza(polizas_ubicacio) 
-            pdfs = buscador.buscar()
-            print(pdfs[0])
 
-            nombre_pdf = os.path.basename(pdfs[0])
 
-            if self.page.locator(f'text="{nombre_pdf}"').count() > 0:
-                print("📎 PDF ya presente")
-            else:
-                self.page.set_input_files(
-                'input[type="file"][name="insuranceFile"]',
-                pdfs[0]
-            )
 
+            # Subir póliza
+            self.subir_poliza(polizas_ubicacio)
+            # Subir comprobante
+            self.subir_comprobante(pago_ubicacion)
 
             #
             # BTO FINALES
@@ -290,8 +322,6 @@ class ManagerBot:
 
 
     def etap_4(self, aseguradora, polizas_ubicacio, pago_ubicacion, excel_ubiacion, guardado_ubicacion ):
-        print("etapa 4")
-        print("Ubicacion:", polizas_ubicacio, pago_ubicacion, excel_ubiacion, guardado_ubicacion)
         try:
             if not self.page.url.startswith(ETAP_4):
                 return False
@@ -301,7 +331,6 @@ class ManagerBot:
             #
             procesador = ProcesadorXLSX(excel_ubiacion)
             datos = procesador.procesar()
-            print(datos)
         
             
             ##
@@ -333,7 +362,7 @@ class ManagerBot:
 
                 # 2️⃣ Click en Buscar
                 btn_buscar = self.page.get_by_role("button", name="Buscar")
-                btn_buscar.wait_for(state="visible", timeout=30000)
+                btn_buscar.wait_for(state="visible", timeout=50000)
                 btn_buscar.click()
                 self.page.wait_for_timeout(1500)
  
@@ -344,12 +373,106 @@ class ManagerBot:
                 #     state="visible"
                 # )
 
+            btn_siguiente = self.page.get_by_role("button", name="Siguiente")
+            btn_siguiente.wait_for(state="visible", timeout=10000)
+            btn_siguiente.click()
 
-            self.page.wait_for_timeout(1000000)
 
             return True
 
         except Exception as e:
-            print("❌ Error en Etapa 3:", e)
+            print("❌ Error en Etapa 4:", e)
             return False
+
+
+    # ===============================
+    # ETAPA 5
+    # ===============================
+    def etap_5(self):
+        try:
+            self.page.goto(ETAP_5)
+            # Click en Siguiente
+            btn = self.page.get_by_role("button", name="Siguiente")
+            btn.wait_for(state="visible", timeout=10000)
+            btn.click()
+
+            # Esperar que aparezca Confirmar
+            btn_confirmar = self.page.get_by_role("button", name="Confirmar")
+            btn_confirmar.wait_for(state="visible", timeout=10000)
+
+            # Click en Confirmar
+            btn_confirmar.click()
+            
+            self.page.wait_for_url(f"{ETAP_6}*", timeout=15000)
+            if self.page.url.startswith(ETAP_6):
+                print("✅ Etapa 5 completada")
+                return True
+        
+
+        except Exception as e:
+            print("❌ Error en Etapa 5:", e)
+            return False
+
+
+
+    # ===============================
+    # ETAPA 6 y Caputo
+    # ===============================
+    def etap_6(self, excel_ubiacion,guardado_ubicacion):
+        try:
+                        
+            procesador = ProcesadorXLSX(excel_ubiacion)
+            datos = procesador.procesar()
+            # print(datos)
+            # Esperar hasta que la página esté en ETAP_6 (procesando)
+            self.page.wait_for_url(f"{ETAP_6}*", timeout=60000)  # espera hasta 60s
+
+            # Asegurarse que la página termine de cargar
+            self.page.wait_for_load_state("networkidle", timeout=60000)
+
+            print("✅ ETAP_6 cargada correctamente, redirigiendo a configuración...")
+
+            # Ir a la página final
+            self.page.goto(URL_CONF)
+            self.page.wait_for_load_state("networkidle", timeout=60000)
+            print("✅ Página de configuración cargada. Esperando input de 'Número de póliza'...")
+
+
+            # Esperar el input de "Número de póliza"
+            input_poliza = self.page.wait_for_selector(
+                'input[placeholder="Número de póliza"]',
+                timeout=6000,
+                state="visible"
+            )
+
+            # Tomar la primera propuesta y extraer solo números de 'idpropuesta'
+            idpropuesta = datos[0]["idpropuesta"]  # ejemplo: 'CA5965'
+            id_numeros = "".join([c for c in idpropuesta if c.isdigit()])  # '5965'
+
+            # 6️⃣Rellenar el input
+            input_poliza.click()
+            input_poliza.fill("")  # limpiar por si tiene valor
+            input_poliza.type(id_numeros, delay=80)
+            self.page.wait_for_timeout(6000)  # 60000 ms = 6 segundos
+           
+
+            # 🔹 Asegurar que el directorio de guardado exista
+            if not os.path.exists(guardado_ubicacion):
+                os.makedirs(guardado_ubicacion)
+
+            # 🔹 Tomar captura de pantalla del contenedor
+            contenedor = self.page.wait_for_selector(
+                'div.space-y-4',  # contenedor raíz de la tabla
+                timeout=6000  # hasta 60 segundos
+            )
+
+            ruta_captura = os.path.join(guardado_ubicacion, f"poliza_{id_numeros}.png")
+            contenedor.screenshot(path=ruta_captura)
+            print(f"✅ Input 'Número de póliza' completado con: {id_numeros}")
+            return True
+
+        except Exception as e:
+            print("❌ Error en Etapa 6:", e)
+            return False
+
 

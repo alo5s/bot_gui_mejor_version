@@ -6,4 +6,9 @@ ETAP_1 = "https://new.takerap.com/asegurar-trabajador/step/1"
 ETAP_2 = "https://new.takerap.com/asegurar-trabajador/poliza-terceros/step/2"
 ETAP_3 = "https://new.takerap.com/asegurar-trabajador/poliza-terceros/step/3"
 ETAP_4 = "https://new.takerap.com/asegurar-trabajador/poliza-terceros/step/4"
+ETAP_5 = "https://new.takerap.com/asegurar-trabajador/poliza-terceros/step/5"
 
+## Etapa final y caputra
+ETAP_6 = "https://new.takerap.com/asegurar-trabajador/poliza-terceros/procesando"
+
+URL_CONF = "https://new.takerap.com/coberturas-terceros?page=1"

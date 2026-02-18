@@ -1,6 +1,8 @@
+# ui/layout/layout_home.py
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMessageBox,
-    QFileDialog, QComboBox, QTextEdit
+    QFileDialog, QComboBox, QTextEdit, QDialog
 )
 from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtCore import Signal, QSettings, Qt
@@ -458,4 +460,42 @@ class HomeView(QWidget):
 
     def show_poliza_alert(self, mensaje: str):
         QMessageBox.information(self, "Póliza terminada", mensaje)
+    
+
+
+
+    def show_persona_no_encontrada(self, dni: str, poliza: str, nombre: str):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Persona no encontrada")
+        dialog.setObjectName("persona_alert_box")
+        dialog.setMinimumWidth(420)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+
+        label_poliza = QLabel(f"Póliza: {poliza}")
+        label_poliza.setObjectName("persona_alert_poliza")
+
+        label_nombre = QLabel(nombre)
+        label_nombre.setObjectName("persona_alert_nombre")
+
+        label_dni = QLabel(f"DNI: {dni}")
+        label_dni.setStyleSheet("color: #777; font-size: 13px;")
+
+        btn_ok = QPushButton("Cerrar")
+        btn_ok.clicked.connect(dialog.accept)
+
+        layout.addWidget(label_poliza)
+        layout.addWidget(label_nombre)
+        layout.addWidget(label_dni)
+        layout.addSpacing(10)
+        layout.addWidget(btn_ok)
+
+        dialog.exec()
+
+        self.status_label.setText("⚠ Persona no encontrada")
+        self.logs.append(
+            f"Persona no encontrada | DNI: {dni} | Póliza: {poliza} | {nombre}"
+        )
 

@@ -25,6 +25,9 @@ class AppController:
 
         self.worker.error.connect(self.on_worker_error)
 
+
+        self.worker.persona_no_encontrada.connect(self.show_persona_no_encontrada)
+
         # ---------- vista login ----------
         self.login_view = LoginView()
         self.login_view.login_requested.connect(self.start_login)
@@ -113,4 +116,14 @@ class AppController:
         self.login_view.login_requested.connect(self.start_login)
         self.window.setCentralWidget(self.login_view)
         self.login_view.show_error(msg)
+
+
+
+    def show_persona_no_encontrada(self, data: dict):
+        if hasattr(self, "home"):
+            self.home.show_persona_no_encontrada(
+                data["dni"],
+                data["poliza"],
+                data["asegurado"]
+            )
 

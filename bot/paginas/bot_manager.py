@@ -5,474 +5,328 @@ from bot.config.settings import TIMEOUT_1, TIMEOUT_2
 from tools.proceso_dato import ProcesadorXLSX, BuscarPDFPoliza, Comprobante_pago
 
 import unicodedata
-
 from datetime import datetime
 import os
+from playwright.sync_api import expect
 
+
+import time
 class ManagerBot:
     def __init__(self, page):
         self.page = page
+        self.page.set_default_timeout(30000)
+        self.page.set_default_navigation_timeout(60000)
 
-
+    # ===============================
+    # UTIL
+    # ===============================
     def normalizar(self, texto: str) -> str:
         if not texto:
             return ""
-
         texto = texto.strip()
         texto = unicodedata.normalize("NFKD", texto)
         texto = texto.encode("ascii", "ignore").decode("ascii")
         return texto.lower()
 
+    # ===============================
+    # SUBIDAS
+    # ===============================
     def subir_comprobante(self, pago_ubicacion):
+        # Si no mandan ubicación → no hacemos nada
+        if not pago_ubicacion:
+            return
+
+        archivos = Comprobante_pago(pago_ubicacion).buscar()
+
+        # Si no encontró archivo → no hacemos nada
+        if not archivos:
+            print("⚠ No se encontró comprobante, se continúa sin subir archivo")
+            return
+
         contenedor = self.page.locator(
             'div.space-y-2:has(label:text-is("Comprobante de pago (Opcional)"))'
         )
 
-        # 🔹 Si ya hay archivo, click en X para eliminarlo
         btn_remove = contenedor.locator('button:has(svg.lucide-x)')
         if btn_remove.count() > 0:
-            print("♻ Eliminando archivo previo de comprobante...")
             btn_remove.first.click()
-            self.page.wait_for_timeout(800)  # espera que React limpie el input
 
-        # 🔹 Subir el archivo
-        ruta_archivo = Comprobante_pago(pago_ubicacion).buscar()[0]
-        input_file = contenedor.locator('input[name="insurancePaymentFile"]')
-        print(f"⬆ Subiendo comprobante {os.path.basename(ruta_archivo)}")
-        input_file.set_input_files(ruta_archivo)
+        ruta = archivos[0]
+        contenedor.locator('input[name="insurancePaymentFile"]').set_input_files(ruta)
 
-    def subir_poliza(self, polizas_ubicacio):
-        # Localizar el contenedor de Póliza
+    def subir_poliza(self, polizas_ubicacion):
         contenedor = self.page.locator(
             'div.space-y-2:has(label:text-is("Póliza"))'
         )
 
-        # 🔹 Si ya hay archivo subido, hacer click en la X para eliminarlo
         btn_remove = contenedor.locator('button:has(svg.lucide-x)')
         if btn_remove.count() > 0:
-            print("♻ Eliminando archivo previo de póliza...")
             btn_remove.first.click()
-            self.page.wait_for_timeout(800)  # esperar que se limpie el input
 
-        # 🔹 Subir el archivo
-        ruta_archivo = BuscarPDFPoliza(polizas_ubicacio).buscar()[0]
-        input_file = contenedor.locator('input[name="insuranceFile"]')
-        print(f"⬆ Subiendo póliza {os.path.basename(ruta_archivo)}")
-        input_file.set_input_files(ruta_archivo)
-
-
+        ruta = BuscarPDFPoliza(polizas_ubicacion).buscar()[0]
+        contenedor.locator('input[name="insuranceFile"]').set_input_files(ruta)
 
     # ===============================
     # STOP
     # ===============================
     def detener(self):
         try:
-            self.page.goto(URL_HOME)
-            print("🛑 Bot detenido")
-        except Exception as e:
-            print("❌ Error al detener:", e)
+            self.page.goto(URL_HOME, wait_until="domcontentloaded")
+        except:
+            pass
 
     # ===============================
     # ETAPA 1
     # ===============================
     def etap_1(self):
         try:
-            self.page.goto(ETAP_1)
+            self.page.goto(ETAP_1, wait_until="domcontentloaded")
 
-            particular_div = self.page.wait_for_selector(
-                'text="Subí tu Cobertura Particular"',
-                timeout=TIMEOUT_1,
-                state='visible'
-            )
-            particular_div.click()
+            self.page.get_by_text(
+                "Subí tu Cobertura Particular", exact=True
+            ).click()
 
-            self.page.wait_for_timeout(500)
+            self.page.get_by_text(
+                "Continuar con Cobertura Particular", exact=True
+            ).click()
 
-            continuar_btn = self.page.wait_for_selector(
-                'text="Continuar con Cobertura Particular"',
-                timeout=TIMEOUT_1,
-                state='visible'
-            )
-            continuar_btn.click()
-
-            self.page.wait_for_timeout(500)
-
-            if self.page.url.startswith(ETAP_2):
-                print("✅ Etapa 1 completada")
-                return True
-
-            return False
+            self.page.wait_for_url(f"{ETAP_2}*", timeout=8000)
+            return True
 
         except Exception as e:
-            print("❌ Error en Etapa 1:", e)
+            print("❌ Etapa 1:", e)
             return False
 
     # ===============================
     # ETAPA 2
     # ===============================
     def etap_2(self, ls_ubicaciones):
-        print("etapa 2")
-        print(ls_ubicaciones)
-
         try:
             if not self.page.url.startswith(ETAP_2):
                 return False
 
-            combobox_btn = self.page.wait_for_selector(
-                'button[role="combobox"]',
-                timeout=TIMEOUT_2,
-                state='visible'
-            )
-            # combobox_btn.click()
+            combobox = self.page.locator('button[role="combobox"]')
+
             for ubicacion in ls_ubicaciones:
                 try:
-                    combobox_btn.click()
+                    combobox.click()
 
-                    self.page.wait_for_timeout(500)
-                    # opcion = self.page.get_by_text(ubicacion, exact=True).locator("..")
-                    # opcion.click()
-                    opcion = self.page.wait_for_selector(
-                        # f'div.relative.flex.cursor-pointer:has-text("{ubicacion}")',
-                        f'span:text-is("{ubicacion}")',
-                        timeout=TIMEOUT_2,
-                        state='visible'
+                    opcion = self.page.locator(
+                        f'span:text-is("{ubicacion}")'
                     )
-                    self.page.wait_for_timeout(500)
-
                     opcion.click()
-                    self.page.wait_for_timeout(500)
-        
-                    confirmar_btn = self.page.wait_for_selector(
-                        'button:has-text("Confirmar selección")',
-                    timeout=TIMEOUT_2
-                    )
-                    self.page.wait_for_timeout(500)
 
-                    confirmar_btn.click()
+                    self.page.get_by_role(
+                        "button", name="Confirmar selección"
+                    ).click()
 
-
-                except Exception:
+                except:
                     print(f"⚠ Ubicación no encontrada: {ubicacion}")
+                    return False
 
-            # btn confirmar seleccionada 
-            # self.page.wait_for_timeout(5000)
-            #
-            #
-            # self.confirmar_btn.click()
-            print("listo") 
-            self.page.wait_for_timeout(500)
-
-            siguiente_btn = self.page.wait_for_selector(
-                'text="Siguiente"',
-                timeout=TIMEOUT_2,
-                state='visible'
-            )
-            siguiente_btn.click()
-
-
-            self.page.wait_for_timeout(500)
-            print("listo")
-            if self.page.url.startswith(ETAP_3):
-                print("✅ Etapa 2 completada")
-                return True
-
-            return False
-
-        except Exception as e:
-            print("❌ Error en Etapa 2:", e)
-            return False
-
-    # ===============================
-    # ETAPA 3 (placeholder)
-    # ===============================
-    def etap_3(self, aseguradora, polizas_ubicacio, pago_ubicacion, excel_ubiacion, guardado_ubicacion ):
-        try:
-            if not self.page.url.startswith(ETAP_3):
-                return False
-
-
-
-            try:
-                close_btn = self.page.get_by_role("button", name="Close")
-                close_btn.wait_for(state="visible", timeout=1500)
-                click_btn.click()
-            except:
-                print("no se clcik")
-                pass  
-
-            #
-            # 1 parte selecion Aseguradora y la asegurador y click el btn combobox
-            #
-
-            label = self.page.get_by_text("Aseguradora", exact=True)
-
-            combobox_btn = label.locator(
-                'xpath=following::button[@aria-haspopup="dialog"][1]'
-            )       
-
-            combobox_btn.scroll_into_view_if_needed()
-            self.page.wait_for_timeout(500)
-
-            combobox_btn.click()
-            self.page.wait_for_timeout(500)
-
-            search_input = self.page.wait_for_selector(
-                'input[placeholder="Buscar..."]',
-                timeout=TIMEOUT_2,
-                state="visible"
-            )
-            self.page.wait_for_timeout(500)
-
-            search_input.fill("")
-            self.page.wait_for_timeout(500)
-            aseg = str(aseguradora[0])
-            search_input.type(aseg, delay=80)
-
-
-
-            self.page.wait_for_timeout(500)
-
-            resultado = self.page.wait_for_selector(
-                f'div[role="dialog"] div:has(span:text-is("{aseg}"))',
-                timeout=TIMEOUT_2,
-                state="visible"
-            )
-            resultado.click()
-            
-            #
-            # procesaremos los datos 
-            #
-            procesador = ProcesadorXLSX(excel_ubiacion)
-            datos = procesador.procesar()
-            if datos:
-                base = datos[0]
-                idpropuesta = base["idpropuesta"]
-                fecha_pago = base["fecha_pago"]
-                fin_vigencia = base["fin_vigencia"]
-
-
-            #
-            # Inputo de fecha
-            #
-            input_poliza = self.page.wait_for_selector(
-                'input[placeholder="Ingresa el número de póliza"]',
-                timeout=TIMEOUT_2,
-                state="visible"
-            )
-
-            input_poliza.click()
-            input_poliza.fill("")              # por si trae algo 
-            input_poliza.type(idpropuesta, delay=80)
-
-            #
-            # fechas
-            #
-            fecha_inicio = datetime.strptime(fecha_pago, "%d/%m/%Y").strftime("%Y-%m-%d")
-            fecha_final = datetime.strptime(fin_vigencia, "%d/%m/%Y").strftime("%Y-%m-%d")
-
-            input_fecha = self.page.wait_for_selector(
-                'input[type="date"][name="startDate"]',
-                timeout=TIMEOUT_2,
-                state="visible"
-            )
-            input_fecha.fill(fecha_inicio)
-
-            input_fecha_fin = self.page.wait_for_selector(
-                'input[type="date"][name="endDate"]',
-                timeout=TIMEOUT_2,
-                state="visible"
-            )
-
-            input_fecha_fin.fill(fecha_final)
-
-
-
-            # Subir póliza
-            self.subir_poliza(polizas_ubicacio)
-            # Subir comprobante
-            self.subir_comprobante(pago_ubicacion)
-
-            #
-            # BTO FINALES
-            #
-            btn = self.page.wait_for_selector(
-                'button[type="submit"]',
-                state='visible',
-                timeout=30000
-            )
-            btn.click()
-
-            self.btn_continuar = self.page.get_by_role("button", name="Continuar")
-            self.btn_continuar.wait_for(state="visible", timeout=30000)
-            self.btn_continuar.scroll_into_view_if_needed()
-            self.btn_continuar.click(force=True)
-                       
-            self.page.wait_for_timeout(1500)
-            self.page.wait_for_load_state("networkidle")
-            if self.page.url.startswith(ETAP_4):
-                print("✅ Etapa 3 completada")
-                return True
-
-            return False
-
-        except Exception as e:
-            print("❌ Error en Etapa 3:", e)
-            return False
-
-
-
-    def etap_4(self, aseguradora, polizas_ubicacio, pago_ubicacion, excel_ubiacion, guardado_ubicacion ):
-        try:
-            if not self.page.url.startswith(ETAP_4):
-                return False
-
-            #
-            # procesaremos los datos 
-            #
-            procesador = ProcesadorXLSX(excel_ubiacion)
-            datos = procesador.procesar()
-        
-            
-            ##
-            for persona in datos:
-                dni = str(persona["documento_asegurado"])
-                print("Persona dni:",dni)
-                btn_nuevo = self.page.wait_for_selector(
-                    'button:has-text("Nuevo trabajador")',
-                    state="visible",
-                    timeout=30000
-                )
-
-                btn_nuevo.click()
-                # 1️⃣ Input DNI
-                self.page.wait_for_timeout(500)
-
-                input_dni = self.page.wait_for_selector(
-                    'input[name="dni"]',
-                    state="visible",
-                    timeout=30000
-                )
-                input_dni.click()
-                self.page.wait_for_timeout(500)
-
-                input_dni.fill("")          # limpia por las dudas
-                self.page.wait_for_timeout(500)
-
-                input_dni.type(dni, delay=80)
-
-                # 2️⃣ Click en Buscar
-                btn_buscar = self.page.get_by_role("button", name="Buscar")
-                btn_buscar.wait_for(state="visible", timeout=50000)
-                btn_buscar.click()
-                self.page.wait_for_timeout(1500)
- 
-                #
-                # fila = self.page.wait_for_selector(
-                #     f'tbody tr:has(td:text-is("{dni}"))',
-                #     timeout=15000,
-                #     state="visible"
-                # )
-
-            btn_siguiente = self.page.get_by_role("button", name="Siguiente")
-            btn_siguiente.wait_for(state="visible", timeout=10000)
-            btn_siguiente.click()
-
+            self.page.get_by_text("Siguiente", exact=True).click()
+            self.page.wait_for_url(f"{ETAP_3}*", timeout=8000)
 
             return True
 
         except Exception as e:
-            print("❌ Error en Etapa 4:", e)
+            print("❌ Etapa 2:", e)
             return False
 
+    # ===============================
+    # ETAPA 3
+    # ===============================
+    def etap_3(self, aseguradora, polizas_ubicacion,
+               pago_ubicacion, excel_ubicacion, guardado_ubicacion):
+            
+        print("Esta archivo")
+        print(aseguradora, polizas_ubicacion, polizas_ubicacion)
+        try:
+            if not self.page.url.startswith(ETAP_3):
+                return False
+
+            # Aseguradora
+            label = self.page.get_by_text("Aseguradora", exact=True)
+            combobox = label.locator(
+                'xpath=following::button[@aria-haspopup="dialog"][1]'
+            )
+            combobox.click()
+
+            search_input = self.page.locator(
+                'input[placeholder="Buscar..."]'
+            )
+            aseg = str(aseguradora[0])
+            search_input.fill(aseg)
+
+            self.page.locator(
+                f'div[role="dialog"] span:text-is("{aseg}")'
+            ).click()
+
+            # Datos Excel
+            datos = ProcesadorXLSX(excel_ubicacion).procesar()
+            base = datos[0]
+
+            idpropuesta = base["idpropuesta"]
+            fecha_pago = base["fecha_pago"]
+            fin_vigencia = base["fin_vigencia"]
+
+            self.page.locator(
+                'input[placeholder="Ingresa el número de póliza"]'
+            ).fill(idpropuesta)
+
+            fecha_inicio = datetime.strptime(
+                fecha_pago, "%d/%m/%Y"
+            ).strftime("%Y-%m-%d")
+
+            fecha_final = datetime.strptime(
+                fin_vigencia, "%d/%m/%Y"
+            ).strftime("%Y-%m-%d")
+
+            self.page.locator(
+                'input[name="startDate"]'
+            ).fill(fecha_inicio)
+
+            self.page.locator(
+                'input[name="endDate"]'
+            ).fill(fecha_final)
+
+            self.subir_comprobante(pago_ubicacion)  # opcional
+            self.subir_poliza(polizas_ubicacion)    # obligatorio
+
+            # Esperar que el botón Siguiente esté habilitado
+            btn_siguiente = self.page.locator('button[type="submit"]')
+            expect(btn_siguiente).to_be_enabled(timeout=120000)
+            btn_siguiente.click()
+
+
+
+            self.page.get_by_role("button", name="Continuar").click()
+
+            self.page.wait_for_url(f"{ETAP_4}*", timeout=10000)
+            return True
+
+        except Exception as e:
+            print("❌ Etapa 3:", e)
+            return False
+
+    # ===============================
+    # ETAPA 4
+    # ===============================
+    def etap_4(self, aseguradora, polizas_ubicacion,
+               pago_ubicacion, excel_ubicacion, guardado_ubicacion):
+
+        try:
+            if not self.page.url.startswith(ETAP_4):
+                return False
+
+            datos = ProcesadorXLSX(excel_ubicacion).procesar()
+
+            for persona in datos:
+                dni = str(persona["documento_asegurado"])
+                idpropuesta = persona["idpropuesta"]
+                nombre = persona["asegurado"]
+
+                self.page.get_by_role(
+                    "button", name="Nuevo trabajador"
+                ).click()
+
+                self.page.locator('input[name="dni"]').fill(dni)
+
+                self.page.get_by_role(
+                    "button", name="Buscar"
+                ).click()
+                try:
+                    # Espera máximo 5 segundos a que aparezca cualquiera de los dos
+                    self.page.wait_for_selector(
+                        "h2:has-text('Persona encontrada'), h2:has-text('Persona no encontrada')",
+                        timeout=5000
+                    )
+                    print("⛔ Resultado detectado, deteniendo bot:", dni)
+                    return {
+                        "dni": dni,
+                        "poliza": idpropuesta,
+                        "asegurado": nombre
+                    }
+
+                except:
+                    pass
+
+
+            self.page.get_by_role(
+                "button", name="Siguiente"
+            ).click()
+            
+            self.page.wait_for_url(f"{ETAP_5}*", timeout=10000)
+            return True
+
+        except Exception as e:
+            print("❌ Etapa 4:", e)
+            return False
 
     # ===============================
     # ETAPA 5
     # ===============================
     def etap_5(self):
         try:
-            self.page.goto(ETAP_5)
-            # Click en Siguiente
+            # NO hacemos goto innecesario
             btn = self.page.get_by_role("button", name="Siguiente")
-            btn.wait_for(state="visible", timeout=10000)
+            # btn.wait_for(state="visible", timeout=30000)
+            # expect(btn).to_be_enabled(timeout=30000)
             btn.click()
-
+            
             # Esperar que aparezca Confirmar
             btn_confirmar = self.page.get_by_role("button", name="Confirmar")
             btn_confirmar.wait_for(state="visible", timeout=10000)
-
-            # Click en Confirmar
             btn_confirmar.click()
-            
-            self.page.wait_for_url(f"{ETAP_6}*", timeout=15000)
-            if self.page.url.startswith(ETAP_6):
-                print("✅ Etapa 5 completada")
-                return True
-        
 
-        except Exception as e:
-            print("❌ Error en Etapa 5:", e)
-            return False
-
-
-
-    # ===============================
-    # ETAPA 6 y Caputo
-    # ===============================
-    def etap_6(self, excel_ubiacion,guardado_ubicacion):
-        try:
-                        
-            procesador = ProcesadorXLSX(excel_ubiacion)
-            datos = procesador.procesar()
-            # print(datos)
-            # Esperar hasta que la página esté en ETAP_6 (procesando)
-            self.page.wait_for_url(f"{ETAP_6}*", timeout=60000)  # espera hasta 60s
-
-            # Asegurarse que la página termine de cargar
-            self.page.wait_for_load_state("networkidle", timeout=60000)
-
-            print("✅ ETAP_6 cargada correctamente, redirigiendo a configuración...")
-
-            # Ir a la página final
-            self.page.goto(URL_CONF)
-            self.page.wait_for_load_state("networkidle", timeout=60000)
-            print("✅ Página de configuración cargada. Esperando input de 'Número de póliza'...")
-
-
-            # Esperar el input de "Número de póliza"
-            input_poliza = self.page.wait_for_selector(
-                'input[placeholder="Número de póliza"]',
-                timeout=6000,
-                state="visible"
-            )
-
-            # Tomar la primera propuesta y extraer solo números de 'idpropuesta'
-            idpropuesta = datos[0]["idpropuesta"]  # ejemplo: 'CA5965'
-            id_numeros = "".join([c for c in idpropuesta if c.isdigit()])  # '5965'
-
-            # 6️⃣Rellenar el input
-            input_poliza.click()
-            input_poliza.fill("")  # limpiar por si tiene valor
-            input_poliza.type(id_numeros, delay=80)
-            self.page.wait_for_timeout(6000)  # 60000 ms = 6 segundos
-           
-
-            # 🔹 Asegurar que el directorio de guardado exista
-            if not os.path.exists(guardado_ubicacion):
-                os.makedirs(guardado_ubicacion)
-
-            # 🔹 Tomar captura de pantalla del contenedor
-            contenedor = self.page.wait_for_selector(
-                'div.space-y-4',  # contenedor raíz de la tabla
-                timeout=6000  # hasta 60 segundos
-            )
-
-            ruta_captura = os.path.join(guardado_ubicacion, f"poliza_{id_numeros}.png")
-            contenedor.screenshot(path=ruta_captura)
-            print(f"✅ Input 'Número de póliza' completado con: {id_numeros}")
+            self.page.wait_for_url(f"{ETAP_6}*", timeout=10000)
             return True
 
         except Exception as e:
-            print("❌ Error en Etapa 6:", e)
+            print("❌ Etapa 5:", e)
             return False
 
+    # ===============================
+    # ETAPA 6
+    # ===============================
+    def etap_6(self, excel_ubicacion, guardado_ubicacion):
+        try:
+            datos = ProcesadorXLSX(excel_ubicacion).procesar()
+
+            self.page.wait_for_url(f"{ETAP_6}*", timeout=30000)
+            self.page.wait_for_load_state("networkidle", timeout=30000)
+
+            self.page.goto(URL_CONF, wait_until="domcontentloaded")
+            self.page.wait_for_load_state("networkidle", timeout=30000)
+
+            input_poliza = self.page.locator('input[placeholder="Número de póliza"]')
+            input_poliza.wait_for(state="visible", timeout=30000)
+
+            idpropuesta = datos[0]["idpropuesta"]
+            id_numeros = "".join(c for c in idpropuesta if c.isdigit())
+
+            input_poliza.fill(id_numeros)
+            self.page.wait_for_timeout(6000)  # 60000 ms = 6 segundos
+
+            if not os.path.exists(guardado_ubicacion):
+                os.makedirs(guardado_ubicacion)
+
+            contenedor = self.page.locator("div.space-y-4")
+            # contenedor = self.page.wait_for_selector(
+            #     'div.space-y-4',  # contenedor raíz de la tabla
+            #     timeout=1000  # hasta 60 segundos
+            # )
+
+            ruta = os.path.join(
+                guardado_ubicacion,
+                f"poliza_{id_numeros}.png"
+            )
+
+            contenedor.screenshot(path=ruta)
+
+            return True
+
+        except Exception as e:
+            print("❌ Etapa 6:", e)
+            return False
 

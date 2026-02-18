@@ -1,25 +1,53 @@
 # bot/browser_manager.py
 
+import platform
+import shutil
 import os
-import sys
 from playwright.sync_api import sync_playwright
 
 
-def configurar_playwright():
-    """
-    Configura la ruta de los navegadores de Playwright
-    para que funcione tanto en desarrollo como en .exe (PyInstaller)
-    """
-    if getattr(sys, "frozen", False):
-        # Cuando está empaquetado
-        base_path = sys._MEIPASS
-    else:
-        # Cuando está en desarrollo
-        base_path = os.path.dirname(os.path.abspath(__file__))
+# ==========================================================
+# DETECCIÓN DE NAVEGADOR DEL SISTEMA (Windows + Linux)
+# ==========================================================
 
-    browsers_path = os.path.join(base_path, "playwright-browsers")
-    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers_path
+def detectar_navegador():
+    system = platform.system()
 
+    # -------- WINDOWS --------
+    if system == "Windows":
+        posibles = [
+            ("chrome", r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+            ("chrome", r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+            ("msedge", r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+            ("brave", r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"),
+        ]
+
+        for nombre, ruta in posibles:
+            if os.path.exists(ruta):
+                return nombre, ruta
+
+    # -------- LINUX --------
+    elif system == "Linux":
+        posibles = [
+            ("chrome", "google-chrome"),
+            ("msedge", "microsoft-edge"),
+            ("brave", "brave-browser"),
+            ("brave", "brave"),
+            ("chromium", "chromium"),
+            ("chromium-browser", "chromium-browser"),
+        ]
+
+        for nombre, comando in posibles:
+            ruta = shutil.which(comando)
+            if ruta:
+                return nombre, ruta
+
+    return None, None
+
+
+# ==========================================================
+# BROWSER MANAGER (Singleton)
+# ==========================================================
 
 class BrowserManager:
     _instance = None
@@ -39,16 +67,35 @@ class BrowserManager:
 
     def _start_browser(self, headless, start_url):
 
-        # 🔥 IMPORTANTE: configurar antes de iniciar Playwright
-        configurar_playwright()
+        navegador, ruta = detectar_navegador()
+
+        if not navegador:
+            raise Exception(
+                "No se encontró un navegador compatible instalado.\n"
+                "Instale Chrome, Edge, Brave o Chromium."
+            )
 
         self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=headless)
+
+        # Chrome o Edge → usar channel (más estable)
+        if navegador in ["chrome", "msedge"]:
+            self.browser = self.playwright.chromium.launch(
+                channel=navegador,
+                headless=headless
+            )
+
+        # Brave o Chromium → usar ruta directa
+        else:
+            self.browser = self.playwright.chromium.launch(
+                executable_path=ruta,
+                headless=headless
+            )
+
         self.context = self.browser.new_context()
         self.page = self.context.new_page()
 
         if start_url:
-            self.page.goto(start_url)
+            self.page.goto(start_url, wait_until="domcontentloaded")
 
     def close(self):
         if self.browser:

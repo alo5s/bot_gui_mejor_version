@@ -1,3 +1,5 @@
+# controller/workers.py
+
 from PySide6.QtCore import QThread, Signal
 from queue import Queue, Empty
 from bot.browser_manager import BrowserManager
@@ -26,7 +28,7 @@ class SessionWorker(QThread):
     error = Signal(str)
 
     poliza_terminada = Signal(str)  # nueva señal
-
+    persona_no_encontrada = Signal(dict)
     # ---------- init ----------
     def __init__(self, show_browser=True):
         super().__init__()
@@ -224,11 +226,21 @@ class SessionWorker(QThread):
 
         # ---------- ETAPA 4 ----------
         elif self.current_stage == 4:
-            if self.bot.etap_4(self.aseguradora, self.polizas_ubicacion, self.pago_ubicacion, self.excel_ubicacion, self.guardado_ubicacion):
+            resultado = self.bot.etap_4(self.aseguradora, self.polizas_ubicacion, self.pago_ubicacion, self.excel_ubicacion, self.guardado_ubicacion)
+
+            if resultado is True:
                 self.current_stage = 5
                 self.automation_ok.emit("✅ Etapa 4 completada")
+
+            elif isinstance(resultado, dict):
+                dni = resultado
+                self._detener()
+                self.persona_no_encontrada.emit(resultado)
+                return
+            
             else:
                 self._fail("Error en Etapa 4")
+
 
         # ---------- ETAPA 5 ----------
         elif self.current_stage == 5:
@@ -241,7 +253,7 @@ class SessionWorker(QThread):
         # ---------- ETAPA 6 ----------
         elif self.current_stage == 6:
             if self.bot.etap_6(self.excel_ubicacion, self.guardado_ubicacion):
-                self._reset_bot("🎉 Automatización finalizada")
+                self._reset_bot("🎉 Automatización finalizada", finished=True)
             else:
                 self._fail("Error en Etapa 6")
 
@@ -270,7 +282,7 @@ class SessionWorker(QThread):
     # ==================================================
     # RESET / FAIL
     # ==================================================
-    def _reset_bot(self, msg):
+    def _reset_bot(self, msg, finished=False):
         try:
             if self.bot:
                 self.bot.detener()
@@ -283,11 +295,10 @@ class SessionWorker(QThread):
         self.automation_ok.emit(msg)
         self.ubicaciones = []
        
-        # 🔹 Emitir alerta de póliza terminada si corresponde
-        if "Automatización finalizada" in msg:
+        # 🔹 SOLO si terminó correctamente
+        if finished:
             self.poliza_terminada.emit("🎉 ¡Póliza terminada!")
 
-            # 🔹 Limpiar archivos de las ubicaciones
             for carpeta in [self.polizas_ubicacion, self.pago_ubicacion, self.excel_ubicacion]:
                 if carpeta:
                     self.limpiar_archivos(carpeta)
@@ -296,6 +307,12 @@ class SessionWorker(QThread):
     def _fail(self, msg):
         print(msg)
 
+        self._detener()
+        self.automation_error.emit(msg)
+
+
+
+    def _detener(self):
         self.state = BotState.IDLE
         self.current_stage = 1
 
@@ -306,6 +323,4 @@ class SessionWorker(QThread):
                 pass
 
         self.bot = None
-
-        self.automation_ok.emit(f"❌ {msg}")
 

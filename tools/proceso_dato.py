@@ -80,8 +80,10 @@ class Comprobante_pago:
         for extension in ("*.pdf", "*.jpg"):
             archivos.extend(self.directorio.glob(extension))
 
+        # Si no encuentra nada → devolver vacío
         if not archivos:
-            raise FileNotFoundError("No se encontró ningún archivo PDF o PNG")
+            print("⚠ No se encontró comprobante en:", self.directorio)
+            return []
 
         # Devuelve rutas completas en string
         return [str(archivo.resolve()) for archivo in archivos]

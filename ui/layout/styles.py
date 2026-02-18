@@ -1,4 +1,5 @@
-# ==============================
+# ui/layout/styles.py
+
 # UI THEME CONFIG
 # ==============================
 
@@ -234,6 +235,33 @@ QLabel {{
 }}
 """
 
+# ==============================
+# PERSONA NO ENCONTRADA STYLE
+# ==============================
+
+PERSONA_ALERT_STYLE = f"""
+#persona_alert_box {{
+    background-color: {UISettings.COLORS['white']};
+    border-radius: 12px;
+    border: 2px solid {UISettings.COLORS['danger']};
+    padding: 20px;
+    min-width: 420px;
+}}
+
+#persona_alert_poliza {{
+    font-size: 18px;
+    font-weight: bold;
+    color: {UISettings.COLORS['danger']};
+}}
+
+#persona_alert_nombre {{
+    font-size: 16px;
+    font-weight: 600;
+    color: {UISettings.COLORS['text']};
+}}
+"""
+
+
 
 # ==============================
 # EXPORT
@@ -241,6 +269,6 @@ QLabel {{
 
 def get_combined_styles() -> str:
     """Retorna todos los estilos combinados"""
-    return LOGIN_STYLE + "\n" + APP_STYLE + "\n" + COMPONENTS_STYLE
-
+    # return LOGIN_STYLE + "\n" + APP_STYLE + "\n" + COMPONENTS_STYLE
+    return LOGIN_STYLE + "\n" + APP_STYLE + "\n" + COMPONENTS_STYLE + "\n" + PERSONA_ALERT_STYLE
 

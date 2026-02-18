@@ -239,7 +239,7 @@ class ManagerBot:
                     # Espera máximo 5 segundos a que aparezca cualquiera de los dos
                     self.page.wait_for_selector(
                         "h2:has-text('Persona encontrada'), h2:has-text('Persona no encontrada')",
-                        timeout=5000
+                        timeout=3000
                     )
                     print("⛔ Resultado detectado, deteniendo bot:", dni)
                     return {

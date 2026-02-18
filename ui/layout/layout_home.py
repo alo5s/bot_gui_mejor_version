@@ -22,12 +22,10 @@ class HomeView(QWidget):
     resume_requested = Signal()
     stop_requested = Signal()
 
-
     def __init__(self, username: str):
         super().__init__()
 
         self.settings = QSettings("BotRPA", "Paths")
-    
         self.config_settings = QSettings("BotRPA", "Config")
         self.auto_save_enabled = self.config_settings.value(
             "auto_save_data", False, type=bool
@@ -75,26 +73,21 @@ class HomeView(QWidget):
         self.btn_logout = QPushButton("Cerrar sesión")
         self.btn_logout.clicked.connect(self.on_logout_clicked)
 
-        
-        # --------- selectora ----------
+        # --------- selectora ubicaciones ----------
         custom_ubicaciones = self.config_settings.value("custom_ubicaciones", [], type=list)
-        
         if not isinstance(custom_ubicaciones, list):
             custom_ubicaciones = [custom_ubicaciones]
 
         self.ubicaciones = list(dict.fromkeys(DEFAULT_UBICACIONES + custom_ubicaciones))
-        
+
         self.combo_ubicacion = QComboBox()
         self.combo_ubicacion.setEditable(False)
         self.combo_ubicacion.setPlaceholderText("Seleccionar ubicaciones")
         model = QStandardItemModel()
-
-        # placeholder visual (no check, no select)
         placeholder = QStandardItem("Seleccionar ubicaciones")
         placeholder.setEnabled(False)
         model.appendRow(placeholder)
 
-        # items con checkbox
         for u in self.ubicaciones:
             item = QStandardItem(u)
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
@@ -103,40 +96,36 @@ class HomeView(QWidget):
 
         self.combo_ubicacion.setModel(model)
         self.combo_ubicacion.setCurrentIndex(0)
-        
-        # --------- selectora asegurador ----------
-        custom_aseguradoras = self.config_settings.value("custom_aseguradoras", [], type=list)
 
+        # --------- selectora aseguradoras ----------
+        custom_aseguradoras = self.config_settings.value("custom_aseguradoras", [], type=list)
         if not isinstance(custom_aseguradoras, list):
             custom_aseguradoras = [custom_aseguradoras]
 
         self.aseguradoras = list(dict.fromkeys(DEFAULT_ASEGURADORAS + custom_aseguradoras))
-        
+
         self.combo_asegurador = QComboBox()
         self.combo_asegurador.setEditable(False)
         self.combo_asegurador.setPlaceholderText("Seleccionar aseguradora")
-        model = QStandardItemModel()        
-
+        model = QStandardItemModel()
         placeholder = QStandardItem("Seleccionar aseguradora")
         placeholder.setEnabled(False)
         model.appendRow(placeholder)
 
-        # items con checkbox
         for a in self.aseguradoras:
             item = QStandardItem(a)
             item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
             item.setData(Qt.Unchecked, Qt.CheckStateRole)
             model.appendRow(item)
-        
+
         self.combo_asegurador.setModel(model)
         self.combo_asegurador.setCurrentIndex(0)
 
-        # addWIdget
+        # add widgets al control
         control_layout.addWidget(self.btn_start)
         control_layout.addWidget(self.btn_stop)
         control_layout.addWidget(self.combo_ubicacion)
         control_layout.addWidget(self.combo_asegurador)
-        
         control_layout.addStretch()
         control_layout.addWidget(self.btn_logout)
 
@@ -180,11 +169,10 @@ class HomeView(QWidget):
         paths_layout.addWidget(path_row("📊 Excel:", self.label_excel, self.btn_excel))
         self.btn_excel.clicked.connect(lambda: self.select_path("excel", self.label_excel))
 
-        paths_layout.addWidget(path_row("📂 Guardado (Verificacion):", self.label_guardado, self.btn_guardado))
+        paths_layout.addWidget(path_row("📂 Guardado:", self.label_guardado, self.btn_guardado))
         self.btn_guardado.clicked.connect(lambda: self.select_path("guardado", self.label_guardado))
-        
-        paths_card.setLayout(paths_layout)
 
+        paths_card.setLayout(paths_layout)
 
         # ================= LOGS =================
         logs_card = QWidget()
@@ -195,14 +183,12 @@ class HomeView(QWidget):
         logs_title = QLabel("Logs del sistema")
         logs_title.setObjectName("logs_title")
 
-
         self.btn_clear_data = QPushButton("🧹 Borrar datos guardados")
         self.btn_clear_data.clicked.connect(self.clear_saved_data)
 
-
         self.btn_logs = QPushButton("Limpiar Log")
         self.btn_logs.clicked.connect(self.clear_logs)
-        
+
         self.logs = QTextEdit()
         self.logs.setReadOnly(True)
         self.logs.setObjectName("logs_box")
@@ -211,13 +197,11 @@ class HomeView(QWidget):
         content_logs.addWidget(logs_title)
         content_logs.addStretch()
         content_logs.addWidget(self.btn_clear_data)
-
         content_logs.addWidget(self.btn_logs)
 
         logs_layout.addLayout(content_logs)
         logs_layout.addWidget(self.logs)
         logs_card.setLayout(logs_layout)
-
 
         # ================= layout =================
         main_layout.addWidget(header)
@@ -230,19 +214,24 @@ class HomeView(QWidget):
         # 🔥 Restaurar datos si está activado
         self._load_saved_paths()
         self._load_saved_selections()
+
     # ==================================================
     # BOT CONTROLS
     # ==================================================
     def on_start_pause_clicked(self):
+        ubicaciones = self.get_selected_ubicaciones()
+        aseguradoras = self.get_selected_seguro()
+
+        # validar ubicación obligatoria
+        if not ubicaciones:
+            self.status_label.setText("⚠ Seleccione al menos una ubicación")
+            return
+
+        if not aseguradoras:
+            self.status_label.setText("⚠ Seleccione al menos una aseguradora")
+            return
 
         if not self.bot_running:
-            ubicaciones = self.get_selected_ubicaciones()
-            aseguradoras = self.get_selected_seguro()
-
-            if not ubicaciones or not aseguradoras:
-                self.status_label.setText("⚠ Seleccione ubicación y aseguradora")
-                return
-
             if self.auto_save_enabled:
                 self.settings.setValue("ubicaciones_seleccionadas", ubicaciones)
                 self.settings.setValue("aseguradoras_seleccionadas", aseguradoras)
@@ -292,7 +281,6 @@ class HomeView(QWidget):
     # CLEAR DATA
     # ==================================================
     def clear_saved_data(self):
-
         reply = QMessageBox.warning(
             self,
             "Borrar datos",
@@ -301,7 +289,6 @@ class HomeView(QWidget):
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
-
         if reply != QMessageBox.Yes:
             return
 
@@ -331,7 +318,6 @@ class HomeView(QWidget):
         self.btn_logout.setText("⏳ Cerrando sesión...")
         self.logout_requested.emit()
 
-
     def clear_logs(self):
         self.logs.clear()
 
@@ -354,10 +340,32 @@ class HomeView(QWidget):
             if model.item(i) and model.item(i).checkState() == Qt.Checked
         ]
 
+    # ==================================================
+    # PATHS
+    # ==================================================
+    def select_path(self, key, label):
+        path = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta")
+        if path:
+            label.setText(path)
+            if self.auto_save_enabled:
+                self.settings.setValue(key, path)
+
+    def _load_saved_paths(self):
+        if not self.auto_save_enabled:
+            return
+        for key, label in {
+            "polizas": self.label_polizas,
+            "pagos": self.label_pagos,
+            "excel": self.label_excel,
+            "guardado": self.label_guardado,
+        }.items():
+            value = self.settings.value(key)
+            if value:
+                label.setText(value)
+
     def _load_saved_selections(self):
         if not self.auto_save_enabled:
             return
-
         ubicaciones = self.settings.value("ubicaciones_seleccionadas", [])
         aseguradoras = self.settings.value("aseguradoras_seleccionadas", [])
 
@@ -375,28 +383,6 @@ class HomeView(QWidget):
                 item = model.item(i)
                 if item and item.text() in saved:
                     item.setCheckState(Qt.Checked)
-
-    def select_path(self, key, label):
-        path = QFileDialog.getExistingDirectory(self, "Seleccionar carpeta")
-        if path:
-            label.setText(path)
-            if self.auto_save_enabled:
-                self.settings.setValue(key, path)
-
-    def _load_saved_paths(self):
-        if not self.auto_save_enabled:
-            return
-
-        for key, label in {
-            "polizas": self.label_polizas,
-            "pagos": self.label_pagos,
-            "excel": self.label_excel,
-            "guardado": self.label_guardado,
-        }.items():
-            value = self.settings.value(key)
-            if value:
-                label.setText(value)
-
 
     # ==================================================
     # RECARGAR DATOS PERSONALIZADOS (DESDE MENUBAR)
@@ -457,12 +443,11 @@ class HomeView(QWidget):
         self.combo_asegurador.setModel(model)
         self.combo_asegurador.setCurrentIndex(0)
 
-
+    # ==================================================
+    # ALERTAS
+    # ==================================================
     def show_poliza_alert(self, mensaje: str):
         QMessageBox.information(self, "Póliza terminada", mensaje)
-    
-
-
 
     def show_persona_no_encontrada(self, dni: str, poliza: str, nombre: str):
         dialog = QDialog(self)
@@ -489,7 +474,7 @@ class HomeView(QWidget):
 
         btn_ok = QPushButton("Cerrar")
         btn_ok.clicked.connect(dialog.accept)
-        
+
         layout.addWidget(label_title)
         layout.addWidget(label_poliza)
         layout.addWidget(label_nombre)

@@ -474,6 +474,10 @@ class HomeView(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(10)
 
+        # 🔴 Título principal
+        label_title = QLabel("⚠ Persona no encontrada")
+        label_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #d9534f;")
+
         label_poliza = QLabel(f"Póliza: {poliza}")
         label_poliza.setObjectName("persona_alert_poliza")
 
@@ -485,7 +489,8 @@ class HomeView(QWidget):
 
         btn_ok = QPushButton("Cerrar")
         btn_ok.clicked.connect(dialog.accept)
-
+        
+        layout.addWidget(label_title)
         layout.addWidget(label_poliza)
         layout.addWidget(label_nombre)
         layout.addWidget(label_dni)

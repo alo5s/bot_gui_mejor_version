@@ -6,9 +6,8 @@ from controller.workers import SessionWorker
 
 
 class AppController:
-    def __init__(self, window, aseguradoras):
+    def __init__(self, window):
         self.window = window
-        self.aseguradoras = aseguradoras
         self.show_browser = True
 
         # ---------- worker único ----------

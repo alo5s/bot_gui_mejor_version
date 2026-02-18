@@ -46,7 +46,7 @@ def detectar_navegador():
 
 
 # ==========================================================
-# BROWSER MANAGER (Singleton)
+# BROWSER MANAGER (Singleton Optimizado)
 # ==========================================================
 
 class BrowserManager:
@@ -58,6 +58,9 @@ class BrowserManager:
         self.context = None
         self.page = None
 
+    # ------------------------------------------------------
+    # SINGLETON
+    # ------------------------------------------------------
     @classmethod
     def get_instance(cls, headless=True, start_url=None):
         if cls._instance is None:
@@ -65,43 +68,100 @@ class BrowserManager:
             cls._instance._start_browser(headless, start_url)
         return cls._instance
 
-    def _start_browser(self, headless, start_url):
+    # ------------------------------------------------------
+    # INICIO OPTIMIZADO DEL NAVEGADOR
+    # ------------------------------------------------------
+    def _start_browser(self, headless=True, start_url=None):
 
         navegador, ruta = detectar_navegador()
 
         if not navegador:
             raise Exception(
-                "No se encontró un navegador compatible instalado.\n"
+                "No se encontró un navegador compatible.\n"
                 "Instale Chrome, Edge, Brave o Chromium."
             )
 
         self.playwright = sync_playwright().start()
 
-        # Chrome o Edge → usar channel (más estable)
+        # 🔥 ARGUMENTOS DE RENDIMIENTO
+        launch_args = [
+            "--disable-dev-shm-usage",
+            "--disable-extensions",
+            "--disable-infobars",
+            "--disable-background-networking",
+            "--disable-sync",
+            "--disable-default-apps",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-popup-blocking",
+            "--disable-renderer-backgrounding",
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+        ]
+
+        # --------------------------------------------------
+        # LANZAMIENTO
+        # --------------------------------------------------
         if navegador in ["chrome", "msedge"]:
             self.browser = self.playwright.chromium.launch(
                 channel=navegador,
-                headless=headless
+                headless=headless,
+                args=launch_args
             )
-
-        # Brave o Chromium → usar ruta directa
         else:
             self.browser = self.playwright.chromium.launch(
                 executable_path=ruta,
-                headless=headless
+                headless=headless,
+                args=launch_args
             )
 
-        self.context = self.browser.new_context()
+        # --------------------------------------------------
+        # CONTEXTO OPTIMIZADO
+        # --------------------------------------------------
+        self.context = self.browser.new_context(
+            java_script_enabled=True,
+            ignore_https_errors=True,
+            locale="es-ES",
+        )
+
+        # 🔥 BLOQUEAR RECURSOS PESADOS (acelera muchísimo)
+        self.context.route(
+            "**/*",
+            lambda route: route.abort()
+            # if route.request.resource_type in ["image", "media", "font"]
+            if route.request.resource_type in ["media", "font"]
+
+            else route.continue_()
+        )
+
         self.page = self.context.new_page()
 
+        # --------------------------------------------------
+        # IR A URL INICIAL
+        # --------------------------------------------------
         if start_url:
             self.page.goto(start_url, wait_until="domcontentloaded")
 
-    def close(self):
-        if self.browser:
-            self.browser.close()
-        if self.playwright:
-            self.playwright.stop()
+    # ------------------------------------------------------
+    # OBTENER PAGE
+    # ------------------------------------------------------
+    def get_page(self):
+        return self.page
 
-        BrowserManager._instance = None
+    # ------------------------------------------------------
+    # CERRAR NAVEGADOR
+    # ------------------------------------------------------
+    def close(self):
+        try:
+            if self.context:
+                self.context.close()
+
+            if self.browser:
+                self.browser.close()
+
+            if self.playwright:
+                self.playwright.stop()
+
+        finally:
+            BrowserManager._instance = None
 

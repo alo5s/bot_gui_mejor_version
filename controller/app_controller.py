@@ -21,11 +21,11 @@ class AppController:
         self.worker.automation_ok.connect(self.on_automation_ok)
         self.worker.automation_error.connect(self.on_automation_ok)
         self.worker.automation_paused.connect(self.on_automation_paused)
+        
 
         self.worker.error.connect(self.on_worker_error)
-
-
         self.worker.persona_no_encontrada.connect(self.show_persona_no_encontrada)
+
 
         # ---------- vista login ----------
         self.login_view = LoginView()
@@ -50,6 +50,12 @@ class AppController:
 
     def on_login_ok(self, user):
         self.home = HomeView(user)
+        # conectar señal del menú
+
+        
+        # 🔴 CONECTAR ERROR AQUÍ (cuando home ya existe)
+        self.worker.automation_error.connect(self.home.show_bot_error)
+
         # conectar señal del menú
         self.window.menu.data_updated.connect(self.home.reload_custom_data)
         

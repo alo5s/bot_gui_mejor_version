@@ -131,10 +131,18 @@ QComboBox::down-arrow {{
     height: 0px;
 }}
 QAbstractItemView {{
+    color: #000000;             
     background-color: #ffffff;
-
+}}
+QComboBox QAbstractItemView::item {{
+    color: #000000;   
 }}
 
+QComboBox QAbstractItemView::item:checked {{
+    background-color: #e8f0fe;   
+    color: #000000;             
+    font-weight: 600;
+}}
 
 
 #logout_btn {{
@@ -233,6 +241,18 @@ QLabel {{
     color: #e74c3c;
     font-weight: bold;
 }}
+QComboBox QAbstractItemView::indicator:unchecked {{
+    border: 1px solid #bbb;
+    background: white;
+    border-radius: 3px;
+}}
+QComboBox QAbstractItemView::indicator:checked {{
+    border: 1px solid #4a90e2;
+    background: #4a90e2;
+    border-radius: 3px;
+}}
+
+
 """
 
 # ==============================

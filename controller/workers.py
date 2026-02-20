@@ -2,9 +2,9 @@
 
 from PySide6.QtCore import QThread, Signal
 from queue import Queue, Empty
-from bot.browser_manager import BrowserManager
-from bot.paginas.login_manager import ManagerSession
-from bot.paginas.bot_manager import ManagerBot
+# from bot.browser_manager import BrowserManager
+# from bot.paginas.login_manager import ManagerSession
+# from bot.paginas.bot_manager import ManagerBot
 import time
 from pathlib import Path
 
@@ -101,6 +101,9 @@ class SessionWorker(QThread):
 
         # ---------- LOGIN ----------
         if action == "login":
+            from bot.browser_manager import BrowserManager
+            from bot.paginas.login_manager import ManagerSession
+            
             if self.logged:
                 return
             _, user, password = task
@@ -198,6 +201,7 @@ class SessionWorker(QThread):
             return
 
         if not self.bot:
+            from bot.paginas.bot_manager import ManagerBot
             self.bot = ManagerBot(self.session.page)
 
         # ---------- ETAPA 1 ----------
@@ -305,11 +309,19 @@ class SessionWorker(QThread):
 
 
     def _fail(self, msg):
-        print(msg)
+        import traceback
+
+        # Error técnico completo
+        error_detalle = traceback.format_exc()
+
+        # Log completo
+        print("❌ ERROR CRÍTICO:")
+        print(error_detalle)
+
+        # Emitimos SOLO el detalle técnico al log
+        self.automation_error.emit(error_detalle)
 
         self._detener()
-        self.automation_error.emit(msg)
-
 
 
     def _detener(self):

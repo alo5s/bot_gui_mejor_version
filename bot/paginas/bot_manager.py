@@ -139,8 +139,13 @@ class ManagerBot:
     def etap_3(self, aseguradora, polizas_ubicacion,
                pago_ubicacion, excel_ubicacion, guardado_ubicacion):
             
-        print("Esta archivo")
-        print(aseguradora, polizas_ubicacion, polizas_ubicacion)
+        print("DEBUG ETAPA 3")
+        print("aseguradora:", aseguradora)
+        print("polizas_ubicacion:", polizas_ubicacion)
+        print("pago_ubicacion:", pago_ubicacion)
+        print("excel_ubicacion:", excel_ubicacion)
+        print("guardado_ubicacion:", guardado_ubicacion)
+
         try:
             if not self.page.url.startswith(ETAP_3):
                 return False

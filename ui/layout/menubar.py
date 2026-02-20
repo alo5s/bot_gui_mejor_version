@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QMessageBox, QInputDialog
 from PySide6.QtCore import QObject, Signal, QSettings
 
 from ui.layout.manage_data_dialog import ManageDataDialog
-
+import os
 
 class MenuBar(QObject):
     data_updated = Signal()   # 👈 NUEVA SEÑAL
@@ -67,6 +67,13 @@ class MenuBar(QObject):
         about_action = QAction("❓ Acerca de", self.window)
         about_action.triggered.connect(self.show_about)
         app_menu.addAction(about_action)
+
+        # ---- Reset Total / Borrar Caché ----
+        reset_action = QAction("🧹 Reset total (Borrar caché)", self.window)
+        reset_action.triggered.connect(self.reset_app_data)
+        app_menu.addAction(reset_action)
+
+
 
     # ==================================================
     # CONFIG TOGGLES
@@ -235,4 +242,31 @@ class MenuBar(QObject):
             "Controller + Worker + Playwright\n\n"
             "© 2026",
         )
+        
+    def reset_app_data(self):
+        reply = QMessageBox.warning(
+            self.window,
+            "Reset total",
+            "⚠ Esto eliminará TODA la configuración guardada.\n\n"
+            "La aplicación quedará como recién instalada.\n\n"
+            "¿Deseas continuar?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
 
+        if reply != QMessageBox.Yes:
+            return
+
+        #       🔥 Borrar Configuración
+        QSettings("BotRPA", "Config").clear()
+        QSettings("BotRPA", "Paths").clear()
+
+        QMessageBox.information(
+            self.window,
+            "Reset completado",
+            "✅ Datos eliminados correctamente.\n\n"
+            "La aplicación se reiniciará."
+        )
+
+        # 🔄 Reinicio automático (Windows y Linux)
+        os.execl(sys.executable, sys.executable, *sys.argv)

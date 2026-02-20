@@ -8,6 +8,8 @@ from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtCore import Signal, QSettings, Qt
 from .styles import get_combined_styles
 from tools.utilidedes import cargar_aseguradoras
+import os
+
 
 from bot.config.settings import (
     DEFAULT_UBICACIONES,
@@ -28,7 +30,7 @@ class HomeView(QWidget):
         self.settings = QSettings("BotRPA", "Paths")
         self.config_settings = QSettings("BotRPA", "Config")
         self.auto_save_enabled = self.config_settings.value(
-            "auto_save_data", False, type=bool
+            "auto_save_data", True, type=bool
         )
         self.setObjectName("app_widget")
 
@@ -96,6 +98,9 @@ class HomeView(QWidget):
 
         self.combo_ubicacion.setModel(model)
         self.combo_ubicacion.setCurrentIndex(0)
+        # 🔥 AutoSave en tiempo real
+        self.combo_ubicacion.model().itemChanged.connect(self._save_selections_if_enabled)
+        self.combo_ubicacion.model().itemChanged.connect(self._save_selections_if_enabled)
 
         # --------- selectora aseguradoras ----------
         custom_aseguradoras = self.config_settings.value("custom_aseguradoras", [], type=list)
@@ -120,6 +125,9 @@ class HomeView(QWidget):
 
         self.combo_asegurador.setModel(model)
         self.combo_asegurador.setCurrentIndex(0)
+        self.combo_asegurador.model().itemChanged.connect(self._save_selections_if_enabled)
+
+
 
         # add widgets al control
         control_layout.addWidget(self.btn_start)
@@ -222,6 +230,28 @@ class HomeView(QWidget):
         ubicaciones = self.get_selected_ubicaciones()
         aseguradoras = self.get_selected_seguro()
 
+
+
+        # 🔥 VALIDACIÓN DE RUTAS
+        if self.label_excel.text() == "No seleccionado":
+            mensaje = "⚠ Debe seleccionar carpeta Excel"
+            self.status_label.setText(mensaje)
+            QMessageBox.warning(self, "Carpeta requerida", mensaje)
+            return
+
+        if self.label_polizas.text() == "No seleccionada":
+            mensaje = "⚠ Debe seleccionar carpeta de pólizas"
+            self.status_label.setText(mensaje)
+            QMessageBox.warning(self, "Carpeta requerida", mensaje)
+            return
+
+        if self.label_guardado.text() == "No seleccionado":
+            mensaje = "⚠ Debe seleccionar carpeta de guardado"
+            self.status_label.setText(mensaje)
+            QMessageBox.warning(self, "Carpeta requerida", mensaje)
+            return
+
+
         # validar ubicación obligatoria
         if not ubicaciones:
             self.status_label.setText("⚠ Seleccione al menos una ubicación")
@@ -244,10 +274,10 @@ class HomeView(QWidget):
             self.start_requested.emit({
                 "ubicaciones": ubicaciones,
                 "aseguradoras": aseguradoras,
-                "polizas_ubicacion": self.settings.value("polizas"),
-                "pago_ubicacion": self.settings.value("pagos"),
-                "excel_ubicacion": self.settings.value("excel"),
-                "guardado_ubicacion": self.settings.value("guardado"),
+                "polizas_ubicacion": self.label_polizas.text(),
+                "pago_ubicacion": (None if "No seleccion" in self.label_pagos.text()else self.label_pagos.text()),
+                "excel_ubicacion": self.label_excel.text(),
+                "guardado_ubicacion": self.label_guardado.text(),
             })
             return
 
@@ -293,6 +323,14 @@ class HomeView(QWidget):
             return
 
         self.settings.clear()
+
+
+        # 🔥 Borra selecciones guardadas
+        self.settings.remove("ubicaciones_seleccionadas")
+        self.settings.remove("aseguradoras_seleccionadas")
+
+
+
 
         # Reset labels
         self.label_polizas.setText("No seleccionada")
@@ -360,8 +398,11 @@ class HomeView(QWidget):
             "guardado": self.label_guardado,
         }.items():
             value = self.settings.value(key)
-            if value:
+            if value and os.path.exists(value):
                 label.setText(value)
+            else:
+                label.setText("No seleccionado")
+
 
     def _load_saved_selections(self):
         if not self.auto_save_enabled:
@@ -369,10 +410,11 @@ class HomeView(QWidget):
         ubicaciones = self.settings.value("ubicaciones_seleccionadas", [])
         aseguradoras = self.settings.value("aseguradoras_seleccionadas", [])
 
-        if isinstance(ubicaciones, str):
-            ubicaciones = [ubicaciones]
-        if isinstance(aseguradoras, str):
-            aseguradoras = [aseguradoras]
+        if not ubicaciones:
+            ubicaciones = []
+
+        if not aseguradoras:
+            aseguradoras = []
 
         for combo, saved in [
             (self.combo_ubicacion, ubicaciones),
@@ -443,6 +485,19 @@ class HomeView(QWidget):
         self.combo_asegurador.setModel(model)
         self.combo_asegurador.setCurrentIndex(0)
 
+    def _save_selections_if_enabled(self):
+        if not self.auto_save_enabled:
+            return
+
+        ubicaciones = self.get_selected_ubicaciones()
+        aseguradoras = self.get_selected_seguro()
+
+        self.settings.setValue("ubicaciones_seleccionadas", ubicaciones)
+        self.settings.setValue("aseguradoras_seleccionadas", aseguradoras)
+
+
+
+
     # ==================================================
     # ALERTAS
     # ==================================================
@@ -489,3 +544,23 @@ class HomeView(QWidget):
             f"Persona no encontrada | DNI: {dni} | Póliza: {poliza} | {nombre}"
         )
 
+
+    # ==================================================
+    # ERROR GLOBAL DEL BOT
+    # ==================================================
+    def show_bot_error(self, detalle_tecnico: str):
+        # Resetear interfaz
+        self.reset_bot_ui()
+
+        # Log completo (solo aquí va el detalle real)
+        self.logs.append("❌ ERROR CRÍTICO DEL BOT")
+        self.logs.append(detalle_tecnico)
+
+        # Popup simple
+        QMessageBox.critical(
+            self,
+            "Error crítico",
+            "❌ Error crítico.\n\nEl bot fue detenido.\nIntente nuevamente."
+        )
+
+        self.status_label.setText("Estado: Error")

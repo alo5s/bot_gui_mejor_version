@@ -68,23 +68,23 @@ class BuscarPDFPoliza:
 
 
 class Comprobante_pago:
-    def __init__(self, directorio: str):
-        self.directorio = Path(directorio)
+    def __init__(self, directorio: str | None):
+        if not directorio:
+            self.directorio = None
+        else:
+            self.directorio = Path(directorio)
 
     def buscar(self) -> list[str]:
-        if not self.directorio.exists():
-            raise FileNotFoundError("El directorio no existe")
+        if not self.directorio:
+            return []
 
-        # Buscar PDFs y PNGs
+        if not self.directorio.exists():
+            print("⚠ Directorio de pago no existe:", self.directorio)
+            return []
+
         archivos = []
         for extension in ("*.pdf", "*.jpg"):
             archivos.extend(self.directorio.glob(extension))
 
-        # Si no encuentra nada → devolver vacío
-        if not archivos:
-            print("⚠ No se encontró comprobante en:", self.directorio)
-            return []
-
-        # Devuelve rutas completas en string
         return [str(archivo.resolve()) for archivo in archivos]
 

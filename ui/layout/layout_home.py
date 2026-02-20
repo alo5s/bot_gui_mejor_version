@@ -97,9 +97,8 @@ class HomeView(QWidget):
             model.appendRow(item)
 
         self.combo_ubicacion.setModel(model)
-        self.combo_ubicacion.setCurrentIndex(0)
+        self.combo_ubicacion.setCurrentIndex(-1)
         # 🔥 AutoSave en tiempo real
-        self.combo_ubicacion.model().itemChanged.connect(self._save_selections_if_enabled)
         self.combo_ubicacion.model().itemChanged.connect(self._save_selections_if_enabled)
 
         # --------- selectora aseguradoras ----------
@@ -124,7 +123,7 @@ class HomeView(QWidget):
             model.appendRow(item)
 
         self.combo_asegurador.setModel(model)
-        self.combo_asegurador.setCurrentIndex(0)
+        self.combo_asegurador.setCurrentIndex(-1)
         self.combo_asegurador.model().itemChanged.connect(self._save_selections_if_enabled)
 
 
@@ -232,27 +231,21 @@ class HomeView(QWidget):
 
 
 
-        # 🔥 VALIDACIÓN DE RUTAS
-        if self.label_excel.text() == "No seleccionado":
-            mensaje = "⚠ Debe seleccionar carpeta Excel"
-            self.status_label.setText(mensaje)
-            QMessageBox.warning(self, "Carpeta requerida", mensaje)
-            return
+        # ================= VALIDACIÓN DE RUTAS =================
+        rutas_requeridas = {
+            "Excel": self.label_excel,
+            "Pólizas": self.label_polizas,
+            "Guardado": self.label_guardado,
+        }
 
-        if self.label_polizas.text() == "No seleccionada":
-            mensaje = "⚠ Debe seleccionar carpeta de pólizas"
-            self.status_label.setText(mensaje)
-            QMessageBox.warning(self, "Carpeta requerida", mensaje)
-            return
-
-        if self.label_guardado.text() == "No seleccionado":
-            mensaje = "⚠ Debe seleccionar carpeta de guardado"
-            self.status_label.setText(mensaje)
-            QMessageBox.warning(self, "Carpeta requerida", mensaje)
-            return
-
-
-        # validar ubicación obligatoria
+        for nombre, label in rutas_requeridas.items():
+            path = label.text()
+            if not path or not os.path.exists(path):
+                mensaje = f"⚠ Debe seleccionar carpeta de {nombre}"
+                self.status_label.setText(mensaje)
+                QMessageBox.warning(self, "Carpeta requerida", mensaje)
+                return
+        # ================= VALIDACIÓN DE SELECCIONES =================
         if not ubicaciones:
             self.status_label.setText("⚠ Seleccione al menos una ubicación")
             return
@@ -261,7 +254,10 @@ class HomeView(QWidget):
             self.status_label.setText("⚠ Seleccione al menos una aseguradora")
             return
 
+
+        # ================= INICIAR / PAUSAR / REANUDAR BOT =================
         if not self.bot_running:
+            # Guardar selecciones si AutoSave está activado
             if self.auto_save_enabled:
                 self.settings.setValue("ubicaciones_seleccionadas", ubicaciones)
                 self.settings.setValue("aseguradoras_seleccionadas", aseguradoras)
@@ -403,28 +399,46 @@ class HomeView(QWidget):
             else:
                 label.setText("No seleccionado")
 
-
     def _load_saved_selections(self):
         if not self.auto_save_enabled:
             return
-        ubicaciones = self.settings.value("ubicaciones_seleccionadas", [])
-        aseguradoras = self.settings.value("aseguradoras_seleccionadas", [])
 
+        # obtener datos y asegurar que sean listas
+        ubicaciones = self.settings.value("ubicaciones_seleccionadas")
+        aseguradoras = self.settings.value("aseguradoras_seleccionadas")
+
+        # 🔹 Forzar lista vacía si es None
         if not ubicaciones:
             ubicaciones = []
+        elif isinstance(ubicaciones, str):
+            ubicaciones = [ubicaciones]
+        else:
+            # por si viene otro tipo iterable extraño
+            ubicaciones = list(ubicaciones)
 
         if not aseguradoras:
             aseguradoras = []
+        elif isinstance(aseguradoras, str):
+            aseguradoras = [aseguradoras]
+        else:
+            aseguradoras = list(aseguradoras)
 
+        # 🔹 marcar items exactos
         for combo, saved in [
             (self.combo_ubicacion, ubicaciones),
             (self.combo_asegurador, aseguradoras),
         ]:
             model = combo.model()
+            saved_clean = [s.strip() for s in saved]
+
             for i in range(model.rowCount()):
                 item = model.item(i)
-                if item and item.text() in saved:
-                    item.setCheckState(Qt.Checked)
+                if item and item.isCheckable():  # 🔹 solo checkables
+                    if item and item.text().strip() in saved_clean:
+                        item.setCheckState(Qt.Checked)
+                    else:
+                        item.setCheckState(Qt.Unchecked)
+
 
     # ==================================================
     # RECARGAR DATOS PERSONALIZADOS (DESDE MENUBAR)

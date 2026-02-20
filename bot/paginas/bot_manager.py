@@ -105,24 +105,19 @@ class ManagerBot:
             if not self.page.url.startswith(ETAP_2):
                 return False
 
+            # 1️⃣ Abrir combobox una sola vez
             combobox = self.page.locator('button[role="combobox"]')
+            combobox.click()
+            # 2️⃣ Esperar el dialog de opciones
+            dialog = self.page.locator('div[role="dialog"][data-state="open"]')
+            dialog.wait_for(state="visible", timeout=2000)
 
             for ubicacion in ls_ubicaciones:
-                try:
-                    combobox.click()
-
-                    opcion = self.page.locator(
-                        f'span:text-is("{ubicacion}")'
-                    )
-                    opcion.click()
-
-                    self.page.get_by_role(
-                        "button", name="Confirmar selección"
-                    ).click()
-
-                except:
-                    print(f"⚠ Ubicación no encontrada: {ubicacion}")
-                    return False
+                opcion = dialog.locator(f'span:text-is("{ubicacion}")')
+                opcion.wait_for(state="visible", timeout=2000)
+                opcion.click()
+            # 4️⃣ Confirmar selección una sola vez al final
+            dialog.get_by_role("button", name="Confirmar selección").click()
 
             self.page.get_by_text("Siguiente", exact=True).click()
             self.page.wait_for_url(f"{ETAP_3}*", timeout=8000)

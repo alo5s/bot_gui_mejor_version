@@ -9,6 +9,8 @@ from datetime import datetime
 import os
 from playwright.sync_api import expect
 
+import time
+
 
 import time
 class ManagerBot:
@@ -104,8 +106,20 @@ class ManagerBot:
         try:
             if not self.page.url.startswith(ETAP_2):
                 return False
+           
+            btn_close = self.page.get_by_role("button", name="Close")
+            try:
+                btn_close.wait_for(state="visible", timeout=2000)
+                btn_close.click()
+            except:
+                pass
 
-            # 1️⃣ Abrir combobox una sola vez
+            btn_barrio = self.page.locator('button[aria-label="Barrio"]')
+            btn_barrio.wait_for(state="visible", timeout=5000)
+            btn_barrio.click()
+            
+
+           # 1️⃣ Abrir combobox una sola vez
             combobox = self.page.locator('button[role="combobox"]')
             combobox.click()
             # 2️⃣ Esperar el dialog de opciones
@@ -117,7 +131,9 @@ class ManagerBot:
                 opcion.wait_for(state="visible", timeout=2000)
                 opcion.click()
             # 4️⃣ Confirmar selección una sola vez al final
-            dialog.get_by_role("button", name="Confirmar selección").click()
+
+            # cerrar selector
+            self.page.mouse.click(10, 10)
 
             self.page.get_by_text("Siguiente", exact=True).click()
             self.page.wait_for_url(f"{ETAP_3}*", timeout=8000)
